@@ -15,17 +15,20 @@ in vec3 v_normal;
 in vec3 v_tangent;
 
 #include "../libs/lygia/space/xyz2equirect.glsl"
+#include "./util/octahedron2xyz.glsl"
+#include "./util/xyz2octahedron.glsl"
 
 void main() {
     vec3 P = normalize(v_position);
 
-    // get equirect coords
-    vec2 equirect = xyz2equirect(P);
+    vec2 uv = xyz2octahedron(P);
 
     vec3 N = normalize(v_normal);
     vec3 T = normalize(v_tangent);
     vec3 B = normalize(cross(N, T));
     mat3 tangentSpace = mat3(T, B, N);
 
-    outColor = texture(u_texture, equirect);
+    outColor = texture(u_texture, uv);
+    outColor.rgb = vec3(outColor.r) * (max(0., dot(N, vec3(0., 0., 1.))) * 0.7 + 0.3);
+    outColor.a = outColor.r;
 }

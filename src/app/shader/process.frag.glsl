@@ -7,4 +7,5 @@ out vec4 outColor;
 
 void main() {
     outColor = v_color;
+    outColor.a = 0.01;
 }

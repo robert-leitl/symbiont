@@ -43,11 +43,11 @@ export class Sketch {
     };
 
     settings = {
-        moveSpeed: 169.82207943566836,
+        moveSpeed: 240.82207943566836,
         turnSpeed: 54.712084174761483,
-        trailWeight: 150.41252941466865,
+        trailWeight: 100.41252941466865,
         sensorOffsetDist: 11,
-        sensorAngleSpacing: 0.6108652381980153,
+        sensorAngleSpacing: 0.8108652381980153,
         sensorSize: 2.8288838422724623,
         evaporateSpeed: 1.5932796335343884,
         diffuseSpeed: 37.7184512302995,
@@ -55,7 +55,7 @@ export class Sketch {
 
     AGENT_COUNT = 15000;
 
-    texSize = [1800, 800];
+    texSize = [1200, 600];
 
     pointer = [0, 0];
     
@@ -276,14 +276,14 @@ export class Sketch {
         if (!this.pane) return;
 
         const simFolder = this.pane.addFolder({ title: 'Simulation', expanded: true});
-        simFolder.addInput(this.settings, 'moveSpeed', {min: 0, max: 300});
-        simFolder.addInput(this.settings, 'turnSpeed', {min: 0, max: 300});
-        simFolder.addInput(this.settings, 'trailWeight', {min: 0, max: 200});
-        simFolder.addInput(this.settings, 'sensorOffsetDist', {min: 0, max: 100});
-        simFolder.addInput(this.settings, 'sensorAngleSpacing', {min: 0, max: 2});
-        simFolder.addInput(this.settings, 'sensorSize', {min: 0, max: 10});
-        simFolder.addInput(this.settings, 'evaporateSpeed', {min: 0, max: 10});
-        simFolder.addInput(this.settings, 'diffuseSpeed', {min: 0, max: 100});
+        simFolder.addInput(this.settings, 'moveSpeed', {min: 0, max: 500});
+        simFolder.addInput(this.settings, 'turnSpeed', {min: 0, max: 500});
+        simFolder.addInput(this.settings, 'trailWeight', {min: 0, max: 300});
+        simFolder.addInput(this.settings, 'sensorOffsetDist', {min: 0, max: 200});
+        simFolder.addInput(this.settings, 'sensorAngleSpacing', {min: 0, max: 4});
+        simFolder.addInput(this.settings, 'sensorSize', {min: 0, max: 20});
+        simFolder.addInput(this.settings, 'evaporateSpeed', {min: 0, max: 20});
+        simFolder.addInput(this.settings, 'diffuseSpeed', {min: 0, max: 200});
     }
 
     #animate(deltaTime) {
@@ -341,13 +341,15 @@ export class Sketch {
 
         // draw sphere
         twgl.bindFramebufferInfo(gl, null);
+        gl.enable(gl.CULL_FACE);
+        gl.disable(gl.DEPTH_TEST);
+        gl.enable(gl.BLEND);
         this.gl.clearColor(0, 0, 0, 1);
         this.gl.clear(this.gl.COLOR_BUFFER_BIT | this.gl.DEPTH_BUFFER_BIT);
         gl.bindTexture(gl.TEXTURE_2D, this.currentFBI.attachments[0]);
         gl.generateMipmap(gl.TEXTURE_2D);
 
-        gl.enable(gl.CULL_FACE);
-        gl.enable(gl.DEPTH_TEST);
+        gl.blendFunc(gl.SRC_ALPHA, gl.DST_ALPHA);
         gl.useProgram(this.spherePrg.program);
         gl.bindVertexArray(this.sphereVAI.vertexArrayObject);
         twgl.setUniforms(this.spherePrg, {
@@ -359,9 +361,11 @@ export class Sketch {
             u_cameraPos: this.camera.position,
             u_texture: this.currentFBI.attachments[0],
         });
+        gl.cullFace(gl.FRONT);
         twgl.drawBufferInfo(gl, this.sphereVAI);
-        gl.disable(gl.CULL_FACE);
-        gl.disable(gl.DEPTH_TEST);
+        gl.cullFace(gl.BACK);
+        twgl.drawBufferInfo(gl, this.sphereVAI);
+        gl.disable(gl.BLEND);
 
         this.currentFBI = destFBI;
     }

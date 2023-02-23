@@ -21,6 +21,8 @@ uniform vec2 u_pointer;
 #include "../libs/lygia/math/const.glsl"
 #include "../libs/lygia/space/xyz2equirect.glsl"
 #include "../libs/lygia/space/equirect2xyz.glsl"
+#include "./util/octahedron2xyz.glsl"
+#include "./util/xyz2octahedron.glsl"
 
 uint hash(uint s) {
     s ^= 2747636419u;
@@ -49,7 +51,7 @@ float sense(vec3 position, vec3 direction) {
     vec3 sensorCenter = position + direction * sensorOffsetDist;
     sensorCenter = normalize(sensorCenter);
     vec2 size = vec2(textureSize(tex, 0));
-    vec2 sensorUV = xyz2equirect(sensorCenter);
+    vec2 sensorUV = xyz2octahedron(sensorCenter);
     vec4 s = texture(tex, sensorUV);
     return s.r;
 }
@@ -78,25 +80,29 @@ void main() {
 
     v_axis = normalize(axis);
 
+    vec3 pointer = octahedron2xyz(u_pointer);
+    float dist = smoothstep(0.9, 1., max(0., dot(position, pointer)));
+    float pointerTurnSpeed = turnSpeed; // * (1. - dist);
+
     // continue in same direction
     if (weightForward > weightLeft && weightForward > weightRight) {
         //
     } else if (weightForward < weightLeft && weightForward < weightRight) {
-        v_axis = getAxis(position, axis, (randomSteerStrength - 0.5) * 2.0 * turnSpeed * deltaTime);
+        v_axis = getAxis(position, axis, (randomSteerStrength - 0.5) * 2.0 * pointerTurnSpeed * deltaTime);
     } else if (weightRight > weightLeft) {
-        v_axis = getAxis(position, axis, -randomSteerStrength * turnSpeed * deltaTime);
+        v_axis = getAxis(position, axis, -randomSteerStrength * pointerTurnSpeed * deltaTime);
     } else if (weightLeft > weightRight) {
-        v_axis = getAxis(position, axis, randomSteerStrength * turnSpeed * deltaTime);
+        v_axis = getAxis(position, axis, randomSteerStrength * pointerTurnSpeed * deltaTime);
     }
 
     // add pointer contribution
-    vec3 pointer = equirect2xyz(u_pointer);
-    float dist = smoothstep(0.7, 1., max(0., dot(position, pointer)));
     vec3 toPointer = pointer - position;
-    toPointer = cross(position, toPointer) - toPointer * 10.; // tangential influence
+    dist = smoothstep(0.4, 1., max(0., dot(position, pointer)));
+    //toPointer = cross(position, toPointer) - toPointer * 3.; // tangential influence
     vec3 dir = cross(position, normalize(v_axis));
     dir = normalize(dir - toPointer) * dist;
-    v_axis = normalize(v_axis + dir);
+    //v_axis = normalize(v_axis + dir);
+    v_axis = normalize(v_axis + dir * (1. - dist) * 1.);
 
     // move agent
     vec3 newDirection = getDirection(position, v_axis, 0.);
@@ -104,10 +110,12 @@ void main() {
     newPos = normalize(newPos);
 
     v_position = newPos;
+    //v_position = position;
 
     //v_position = normalize(position);
 
-    gl_Position = vec4(xyz2equirect(v_position) * 2. - 1., 0., 1.);
+    gl_Position = vec4(xyz2octahedron(v_position) * 2. - 1., 0., 1.);
     gl_PointSize = 1.0 * (2. * abs(gl_Position.y));
-    v_color = vec4(vec3(trailWeight * deltaTime), 1);
+    gl_PointSize = 1.;
+    v_color = vec4(vec3(trailWeight * deltaTime), 1.);
 }

@@ -16,12 +16,13 @@ void main() {
 
   // Simulate diffuse with a simple 3x3 blur
   vec4 sum;
-  ivec2 size = textureSize(tex, 0);
-  ivec2 samplePos = ivec2(v_texcoord * vec2(size));
+  vec2 size = vec2(textureSize(tex, 0));
+  vec2 texelSize = 1. / size;
+  vec2 samplePos = v_texcoord;
   for (int offsetY = -1; offsetY <= 1; ++offsetY) {
     for (int offsetX = -1; offsetX <= 1; ++offsetX) {
-      ivec2 sampleOff = ivec2(offsetX, offsetY);
-      sum += texelFetch(tex, samplePos + sampleOff, 0);
+      vec2 sampleOff = vec2(offsetX, offsetY) * texelSize;
+      sum += texture(tex, samplePos + sampleOff);
     }
   }
 
@@ -30,5 +31,5 @@ void main() {
   vec4 diffusedValue = mix(originalValue, blurResult, diffuseSpeed * deltaTime);
   vec4 diffusedAndEvaporatedValue = max(vec4(0), diffusedValue - evaporateSpeed * deltaTime);
 
-  outColor = vec4(diffusedAndEvaporatedValue.rgb, 1);
+  outColor = vec4(diffusedAndEvaporatedValue.rgb, 1.);
 }
