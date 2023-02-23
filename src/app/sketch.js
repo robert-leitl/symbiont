@@ -53,9 +53,11 @@ export class Sketch {
         diffuseSpeed: 37.7184512302995,
     }
 
-    AGENT_COUNT = 105000;
+    AGENT_COUNT = 15000;
 
     texSize = [1800, 800];
+
+    pointer = [0, 0];
     
     constructor(canvasElm, onInit = null, isDev = false, pane = null) {
         this.canvas = canvasElm;
@@ -256,6 +258,11 @@ export class Sketch {
             fromEvent(this.canvas, 'pointerup'),
             fromEvent(this.canvas, 'pointerleave')
         ).subscribe(() => this.isPointerDown = false);
+
+        fromEvent(this.canvas, 'pointermove').subscribe((e) => {
+            this.pointer[0] = e.clientX / this.viewportSize[0];
+            this.pointer[1] = 1 -  e.clientY / this.viewportSize[1];
+        });
     }
 
     #initImageTextures() {
@@ -311,6 +318,7 @@ export class Sketch {
 
         twgl.setUniforms(this.processPrg, {
             resolution: this.texSize,
+            u_pointer: this.pointer,
             deltaTime,
             tex: this.currentFBI.attachments[0],
         }, this.settings);

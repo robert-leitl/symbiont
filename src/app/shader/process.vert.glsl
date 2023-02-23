@@ -16,6 +16,7 @@ uniform float sensorAngleSpacing;
 uniform float sensorSize;
 uniform float deltaTime;
 uniform sampler2D tex;
+uniform vec2 u_pointer;
 
 #include "../libs/lygia/math/const.glsl"
 #include "../libs/lygia/space/xyz2equirect.glsl"
@@ -87,6 +88,14 @@ void main() {
     } else if (weightLeft > weightRight) {
         v_axis = getAxis(position, axis, randomSteerStrength * turnSpeed * deltaTime);
     }
+
+    // add pointer contribution
+    vec3 pointer = equirect2xyz(u_pointer);
+    float dist = max(0., dot(position, pointer)) * 0.2;
+    vec3 toPointer = pointer - position;
+    vec3 dir = cross(position, normalize(v_axis));
+    dir = normalize(dir - toPointer) * dist;
+    v_axis = normalize(v_axis + dir);
 
     // move agent
     vec3 newDirection = getDirection(position, v_axis, 0.);
