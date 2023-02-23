@@ -91,8 +91,9 @@ void main() {
 
     // add pointer contribution
     vec3 pointer = equirect2xyz(u_pointer);
-    float dist = max(0., dot(position, pointer)) * 0.2;
+    float dist = smoothstep(0.7, 1., max(0., dot(position, pointer)));
     vec3 toPointer = pointer - position;
+    toPointer = cross(position, toPointer) - toPointer * 10.; // tangential influence
     vec3 dir = cross(position, normalize(v_axis));
     dir = normalize(dir - toPointer) * dist;
     v_axis = normalize(v_axis + dir);
