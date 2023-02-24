@@ -17,6 +17,8 @@ uniform float sensorSize;
 uniform float deltaTime;
 uniform sampler2D tex;
 uniform vec2 u_pointer;
+uniform vec3 u_pointerDir;
+uniform vec2 u_pointerVelocity;
 
 #include "../libs/lygia/math/const.glsl"
 #include "../libs/lygia/space/xyz2equirect.glsl"
@@ -80,7 +82,7 @@ void main() {
 
     v_axis = normalize(axis);
 
-    vec3 pointer = octahedron2xyz(u_pointer);
+    vec3 pointer = normalize(u_pointerDir);
     float dist = smoothstep(0.9, 1., max(0., dot(position, pointer)));
     float pointerTurnSpeed = turnSpeed; // * (1. - dist);
 
@@ -100,9 +102,10 @@ void main() {
     dist = smoothstep(0.4, 1., max(0., dot(position, pointer)));
     //toPointer = cross(position, toPointer) - toPointer * 3.; // tangential influence
     vec3 dir = cross(position, normalize(v_axis));
-    dir = normalize(dir - toPointer) * dist;
+    dir = normalize(dir - toPointer) * dist * 1.3;
     //v_axis = normalize(v_axis + dir);
-    v_axis = normalize(v_axis + dir * (1. - dist) * 1.);
+    float velocityFactor = length(u_pointerVelocity) * 0.3 + 0.7;
+    v_axis = normalize(v_axis + dir * (1. - dist));
 
     // move agent
     vec3 newDirection = getDirection(position, v_axis, 0.);

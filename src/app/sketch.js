@@ -10,6 +10,7 @@ import spreadFrag from './shader/spread.frag.glsl';
 import rampFrag from './shader/ramp.frag.glsl';
 import sphereVert from './shader/sphere.vert.glsl';
 import sphereFrag from './shader/sphere.frag.glsl';
+import blurFrag from './shader/blur.frag.glsl';
 import { rand } from "./utils";
 
 export class Sketch {
@@ -44,7 +45,7 @@ export class Sketch {
 
     settings = {
         moveSpeed: 240.82207943566836,
-        turnSpeed: 54.712084174761483,
+        turnSpeed: 60.712084174761483,
         trailWeight: 100.41252941466865,
         sensorOffsetDist: 11,
         sensorAngleSpacing: 0.8108652381980153,
@@ -55,9 +56,11 @@ export class Sketch {
 
     AGENT_COUNT = 15000;
 
-    texSize = [1200, 600];
+    texSize = [800, 800];
 
     pointer = [0, 0];
+    prevPointerPos = [0, 0];
+    pointerDir = [0, 0, 0];
     
     constructor(canvasElm, onInit = null, isDev = false, pane = null) {
         this.canvas = canvasElm;
@@ -75,13 +78,6 @@ export class Sketch {
         this.#time = time;
         this.#deltaFrames = this.#deltaTime / this.TARGET_FRAME_DURATION;
         this.#frames += this.#deltaFrames;
-
-        this.control.update(this.#deltaTime);
-        mat4.fromQuat(this.worldMatrix, this.control.rotationQuat);
-
-        // update the world inverse transpose
-        mat4.invert(this.worldInverseMatrix, this.worldMatrix);
-        mat4.transpose(this.worldInverseTransposeMatrix, this.worldInverseMatrix);
 
         this.#animate(this.#deltaTime);
         this.#render();
@@ -134,6 +130,7 @@ export class Sketch {
         });
         this.displayPrg = twgl.createProgramInfo(gl, [quadVert, rampFrag]);
         this.spreadPrg = twgl.createProgramInfo(gl, [quadVert, spreadFrag]);
+        this.blurPrg = twgl.createProgramInfo(gl, [quadVert, blurFrag]);
         this.spherePrg = twgl.createProgramInfo(gl, [sphereVert, sphereFrag]);
 
         // Setup Meshes
@@ -145,7 +142,7 @@ export class Sketch {
         // Setup Framebuffers
         this.agentAttachments = [
             { 
-                internalFormat: (ext && ext2) ? gl.RGBA32F : gl.RGBA8, 
+                internalFormat: /*(ext && ext2) ? gl.RGBA32F :*/ gl.RGBA8, 
                 min: gl.LINEAR,
                 mag: gl.LINEAR,
                 wrap: gl.REPEAT
@@ -159,6 +156,7 @@ export class Sketch {
         gl.generateMipmap(gl.TEXTURE_2D);
         gl.clearColor(0, 0, 0, 1);
         gl.clear(gl.COLOR_BUFFER_BIT);
+        this.blurFBI = twgl.createFramebufferInfo(gl, [{ minMag: gl.LINEAR }], this.texSize[0], this.texSize[1]);
 
         
         this.worldMatrix = mat4.create();
@@ -293,6 +291,36 @@ export class Sketch {
         // use a fixed deltaTime of 16 ms adapted to
         // device frame rate
         deltaTime = 16 * this.#deltaFrames;
+
+        this.control.update(deltaTime);
+        mat4.fromQuat(this.worldMatrix, this.control.rotationQuat);
+
+        // update the world inverse transpose
+        mat4.invert(this.worldInverseMatrix, this.worldMatrix);
+        mat4.transpose(this.worldInverseTransposeMatrix, this.worldInverseMatrix);
+
+        // get pointer velocity
+        this.pointerVelocity = [
+            this.pointer[0] - this.prevPointerPos[0],
+            this.pointer[1] - this.prevPointerPos[1]
+        ];
+        this.prevPointerPos = [...this.pointer];
+
+        // get the pointer direction from the 2d position
+        const x = this.pointer[0] * 2 - 1;
+        const y = this.pointer[1] * 2 - 1;
+        const xySq = x * x + y * y;
+        let z = 0;
+        const rSq = 1;
+        if (xySq <= rSq / 2)
+            z = Math.sqrt(rSq - xySq);
+        else
+            z = (rSq / 2) / Math.sqrt(xySq); // hyperbolical function
+
+        this.pointerDir[0] = x;
+        this.pointerDir[1] = y;
+        this.pointerDir[2] = z;
+        vec3.transformMat4(this.pointerDir, this.pointerDir, this.worldInverseMatrix);
     }
 
     #render() {
@@ -319,6 +347,8 @@ export class Sketch {
         twgl.setUniforms(this.processPrg, {
             resolution: this.texSize,
             u_pointer: this.pointer,
+            u_pointerDir: this.pointerDir,
+            u_pointerVelocity: this.pointerVelocity,
             deltaTime,
             tex: this.currentFBI.attachments[0],
         }, this.settings);
@@ -337,6 +367,15 @@ export class Sketch {
             deltaTime,
             tex: destFBI.attachments[0],
         }, this.settings);
+        twgl.drawBufferInfo(gl, this.quadVAI);
+
+        // blur texture
+        twgl.bindFramebufferInfo(gl, this.blurFBI);
+        gl.useProgram(this.blurPrg.program);
+        gl.bindVertexArray(this.quadVAI.vertexArrayObject);
+        twgl.setUniforms(this.blurPrg, {
+            u_texture: destFBI.attachments[0],
+        });
         twgl.drawBufferInfo(gl, this.quadVAI);
 
         // draw sphere
@@ -359,7 +398,7 @@ export class Sketch {
             u_worldInverseTransposeMatrix: this.worldInverseTransposeMatrix,
             u_time: this.#time,
             u_cameraPos: this.camera.position,
-            u_texture: this.currentFBI.attachments[0],
+            u_texture: this.blurFBI.attachments[0],
         });
         gl.cullFace(gl.FRONT);
         twgl.drawBufferInfo(gl, this.sphereVAI);

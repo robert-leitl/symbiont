@@ -29,6 +29,8 @@ void main() {
     mat3 tangentSpace = mat3(T, B, N);
 
     outColor = texture(u_texture, uv);
-    outColor.rgb = vec3(outColor.r) * (max(0., dot(N, vec3(0., 0., 1.))) * 0.7 + 0.3);
+    float value = outColor.r;
+    //value = smoothstep(0., 1., value);
+    outColor.rgb = vec3(value) * (max(0., dot(N, vec3(0., 0., 1.))) * 0.6 + 0.4);
     outColor.a = outColor.r;
 }
