@@ -54,7 +54,7 @@ export class Sketch {
         diffuseSpeed: 37.7184512302995,
     }
 
-    AGENT_COUNT = 15000;
+    AGENT_COUNT = 30000;
 
     texSize = [800, 800];
 

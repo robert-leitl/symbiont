@@ -105,7 +105,9 @@ void main() {
     dir = normalize(dir - toPointer) * dist * 1.3;
     //v_axis = normalize(v_axis + dir);
     float velocityFactor = length(u_pointerVelocity) * 0.3 + 0.7;
-    v_axis = normalize(v_axis + dir * (1. - dist));
+    vec2 pointerPos = u_pointer * 2. - 1.;
+    float pointerPosFactor = 1. -  smoothstep(0.5, 1., length(pointerPos));
+    v_axis = normalize(v_axis + dir * (1. - dist) * pointerPosFactor);
 
     // move agent
     vec3 newDirection = getDirection(position, v_axis, 0.);
