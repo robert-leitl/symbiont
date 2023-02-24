@@ -11,6 +11,8 @@ uniform sampler2D tex;
 
 out vec4 outColor;
 
+#include "./util/wrap-octahedron.glsl"
+
 void main() {
   vec4 originalValue = texture(tex, v_texcoord);
 
@@ -22,7 +24,9 @@ void main() {
   for (int offsetY = -1; offsetY <= 1; ++offsetY) {
     for (int offsetX = -1; offsetX <= 1; ++offsetX) {
       vec2 sampleOff = vec2(offsetX, offsetY) * texelSize;
-      sum += texture(tex, samplePos + sampleOff);
+      vec2 uv = samplePos + sampleOff;
+      vec2 st = wrapOctahedron(uv);
+      sum += texture(tex, st);
     }
   }
 

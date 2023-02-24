@@ -102,7 +102,7 @@ void main() {
     dist = smoothstep(0.4, 1., max(0., dot(position, pointer)));
     //toPointer = cross(position, toPointer) - toPointer * 3.; // tangential influence
     vec3 dir = cross(position, normalize(v_axis));
-    dir = normalize(dir - toPointer) * dist * 1.3;
+    dir = normalize(dir - toPointer) * dist * 1.2;
     //v_axis = normalize(v_axis + dir);
     float velocityFactor = length(u_pointerVelocity) * 0.3 + 0.7;
     vec2 pointerPos = u_pointer * 2. - 1.;
