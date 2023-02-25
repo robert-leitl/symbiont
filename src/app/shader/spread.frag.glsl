@@ -13,25 +13,21 @@ out vec4 outColor;
 
 #include "./util/wrap-octahedron.glsl"
 
+#ifndef BOXBLUR2D_FAST9_SAMPLER_FNC
+#define BOXBLUR2D_FAST9_SAMPLER_FNC(TEX, UV) texture(TEX, wrapOctahedron(UV))
+#endif
+
+#include "../libs/lygia/filter/boxBlur/2D_fast9.glsl"
+
 void main() {
+  vec2 resolution = vec2(textureSize(tex, 0));
+  vec2 texelSize = 1. / resolution;
+
+  // apply simple 3x3 box blur
+  vec4 blurResult = boxBlur2D_fast9(tex, v_texcoord, texelSize);
+
+  // combine diffused value and evaporate
   vec4 originalValue = texture(tex, v_texcoord);
-
-  // Simulate diffuse with a simple 3x3 blur
-  vec4 sum;
-  vec2 size = vec2(textureSize(tex, 0));
-  vec2 texelSize = 1. / size;
-  vec2 samplePos = v_texcoord;
-  for (int offsetY = -1; offsetY <= 1; ++offsetY) {
-    for (int offsetX = -1; offsetX <= 1; ++offsetX) {
-      vec2 sampleOff = vec2(offsetX, offsetY) * texelSize;
-      vec2 uv = samplePos + sampleOff;
-      vec2 st = wrapOctahedron(uv);
-      sum += texture(tex, st);
-    }
-  }
-
-  vec4 blurResult = sum / 9.0;
-
   vec4 diffusedValue = mix(originalValue, blurResult, diffuseSpeed * deltaTime);
   vec4 diffusedAndEvaporatedValue = max(vec4(0), diffusedValue - evaporateSpeed * deltaTime);
 

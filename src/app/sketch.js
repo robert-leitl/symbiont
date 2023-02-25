@@ -7,7 +7,6 @@ import quadVert from './shader/quad.vert.glsl';
 import processVert from './shader/process.vert.glsl';
 import processFrag from './shader/process.frag.glsl';
 import spreadFrag from './shader/spread.frag.glsl';
-import rampFrag from './shader/ramp.frag.glsl';
 import sphereVert from './shader/sphere.vert.glsl';
 import sphereFrag from './shader/sphere.frag.glsl';
 import blurFrag from './shader/blur.frag.glsl';
@@ -49,7 +48,6 @@ export class Sketch {
         trailWeight: 100.41252941466865,
         sensorOffsetDist: 11,
         sensorAngleSpacing: 0.8108652381980153,
-        sensorSize: 2.8288838422724623,
         evaporateSpeed: 1.5932796335343884,
         diffuseSpeed: 37.7184512302995,
     }
@@ -128,14 +126,13 @@ export class Sketch {
         this.processPrg = twgl.createProgramInfo(gl, [processVert, processFrag], {
             transformFeedbackVaryings: ['v_position', 'v_axis'],
         });
-        this.displayPrg = twgl.createProgramInfo(gl, [quadVert, rampFrag]);
         this.spreadPrg = twgl.createProgramInfo(gl, [quadVert, spreadFrag]);
         this.blurPrg = twgl.createProgramInfo(gl, [quadVert, blurFrag]);
         this.spherePrg = twgl.createProgramInfo(gl, [sphereVert, sphereFrag]);
 
         // Setup Meshes
         this.quadBufferInfo = twgl.primitives.createXYQuadBufferInfo(gl);
-        this.quadVAI = twgl.createVertexArrayInfo(gl, this.displayPrg, this.quadBufferInfo);
+        this.quadVAI = twgl.createVertexArrayInfo(gl, this.blurPrg, this.quadBufferInfo);
         this.sphereBufferInfo = twgl.primitives.createSphereBufferInfo(gl, 1, 15, 15);
         this.sphereVAI = twgl.createVertexArrayInfo(gl, this.spherePrg, this.sphereBufferInfo);
 
@@ -174,7 +171,7 @@ export class Sketch {
 
         // render vars
         this.currentFBI = this.fbi1;
-        this.current = this.agents1;
+        this.sourceTFI = this.tfi1;
         this.then = 0;
     }
 
@@ -183,13 +180,13 @@ export class Sketch {
         const gl = this.gl;
 
         const {positions, axis} = this.#createRandomAgents(this.AGENT_COUNT);
-        this.agents1 = this.#createAgents(positions, axis);
-        this.agents2 = this.#createAgents(positions, axis);
+        this.tfi1 = this.#createAgents(positions, axis);
+        this.tfi2 = this.#createAgents(positions, axis);
 
-        twgl.setAttribInfoBufferFromArray(gl, this.agents1.bufferInfo.attribs.position, positions);
-        twgl.setAttribInfoBufferFromArray(gl, this.agents2.bufferInfo.attribs.position, positions);
-        twgl.setAttribInfoBufferFromArray(gl, this.agents1.bufferInfo.attribs.axis, axis);
-        twgl.setAttribInfoBufferFromArray(gl, this.agents2.bufferInfo.attribs.axis, axis);
+        twgl.setAttribInfoBufferFromArray(gl, this.tfi1.bufferInfo.attribs.position, positions);
+        twgl.setAttribInfoBufferFromArray(gl, this.tfi2.bufferInfo.attribs.position, positions);
+        twgl.setAttribInfoBufferFromArray(gl, this.tfi1.bufferInfo.attribs.axis, axis);
+        twgl.setAttribInfoBufferFromArray(gl, this.tfi2.bufferInfo.attribs.axis, axis);
         twgl.bindFramebufferInfo(gl, this.fbi1);
         gl.clear(gl.COLOR_BUFFER_BIT);
         twgl.bindFramebufferInfo(gl, this.fbi2);
@@ -279,7 +276,6 @@ export class Sketch {
         simFolder.addInput(this.settings, 'trailWeight', {min: 0, max: 300});
         simFolder.addInput(this.settings, 'sensorOffsetDist', {min: 0, max: 200});
         simFolder.addInput(this.settings, 'sensorAngleSpacing', {min: 0, max: 4});
-        simFolder.addInput(this.settings, 'sensorSize', {min: 0, max: 20});
         simFolder.addInput(this.settings, 'evaporateSpeed', {min: 0, max: 20});
         simFolder.addInput(this.settings, 'diffuseSpeed', {min: 0, max: 200});
     }
@@ -321,27 +317,28 @@ export class Sketch {
         this.pointerDir[1] = y;
         this.pointerDir[2] = z;
         vec3.transformMat4(this.pointerDir, this.pointerDir, this.worldInverseMatrix);
+
+        this.#animateAgents();
     }
 
-    #render() {
+    #animateAgents() {
         // use a fixed deltaTime of 16 ms adapted to
         // device frame rate
-        let deltaTime = 16 * this.#deltaFrames;
-        deltaTime = 1 / 60;
+        const deltaTime = 1 / 60;
 
         /** @type {WebGLRenderingContext} */
         const gl = this.gl;
 
-        const dest = this.current === this.agents1 ? this.agents2 : this.agents1;
-        const destFBI = this.currentFBI === this.fbi1 ? this.fbi2 : this.fbi1;
+        const targetTFI = this.sourceTFI === this.tfi1 ? this.tfi2 : this.tfi1;
+        this.outFBI = this.currentFBI === this.fbi1 ? this.fbi2 : this.fbi1;
 
         // update particle positions
         gl.bindBuffer(gl.ARRAY_BUFFER, null);
-        twgl.bindFramebufferInfo(gl, destFBI);
+        twgl.bindFramebufferInfo(gl, this.outFBI);
 
         gl.useProgram(this.processPrg.program);
-        gl.bindVertexArray(this.current.vertexArrayInfo.vertexArrayObject);
-        gl.bindTransformFeedback(gl.TRANSFORM_FEEDBACK, dest.transformFeedback);
+        gl.bindVertexArray(this.sourceTFI.vertexArrayInfo.vertexArrayObject);
+        gl.bindTransformFeedback(gl.TRANSFORM_FEEDBACK, targetTFI.transformFeedback);
         gl.beginTransformFeedback(gl.POINTS);
 
         twgl.setUniforms(this.processPrg, {
@@ -352,9 +349,9 @@ export class Sketch {
             deltaTime,
             tex: this.currentFBI.attachments[0],
         }, this.settings);
-        twgl.drawBufferInfo(gl, this.current.vertexArrayInfo, gl.POINTS, this.AGENT_COUNT);
+        twgl.drawBufferInfo(gl, this.sourceTFI.vertexArrayInfo, gl.POINTS, this.AGENT_COUNT);
 
-        this.current = dest;
+        this.sourceTFI = targetTFI;
 
         gl.endTransformFeedback();
         gl.bindTransformFeedback(gl.TRANSFORM_FEEDBACK, null);
@@ -365,16 +362,21 @@ export class Sketch {
         gl.bindVertexArray(this.quadVAI.vertexArrayObject);
         twgl.setUniforms(this.spreadPrg, {
             deltaTime,
-            tex: destFBI.attachments[0],
+            tex: this.outFBI.attachments[0],
         }, this.settings);
         twgl.drawBufferInfo(gl, this.quadVAI);
+    }
+
+    #render() {
+        /** @type {WebGLRenderingContext} */
+        const gl = this.gl;
 
         // blur texture
         twgl.bindFramebufferInfo(gl, this.blurFBI);
         gl.useProgram(this.blurPrg.program);
         gl.bindVertexArray(this.quadVAI.vertexArrayObject);
         twgl.setUniforms(this.blurPrg, {
-            u_texture: destFBI.attachments[0],
+            u_texture: this.outFBI.attachments[0],
         });
         twgl.drawBufferInfo(gl, this.quadVAI);
 
@@ -406,7 +408,7 @@ export class Sketch {
         twgl.drawBufferInfo(gl, this.sphereVAI);
         gl.disable(gl.BLEND);
 
-        this.currentFBI = destFBI;
+        this.currentFBI = this.outFBI;
     }
 
     #updateCameraMatrix() {
