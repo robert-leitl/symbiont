@@ -11,6 +11,7 @@ import sphereVert from './shader/sphere.vert.glsl';
 import sphereFrag from './shader/sphere.frag.glsl';
 import blurFrag from './shader/blur.frag.glsl';
 import { rand } from "./utils";
+import { GLBBuilder } from "./utils/glb-builder";
 
 export class Sketch {
 
@@ -25,8 +26,8 @@ export class Sketch {
 
     camera = {
         matrix: mat4.create(),
-        near: 0.1,
-        far: 5,
+        near: 2,
+        far: 4,
         fov: Math.PI / 3,
         aspect: 1,
         position: vec3.fromValues(0, 0, 4),
@@ -50,6 +51,10 @@ export class Sketch {
         sensorAngleSpacing: 0.8108652381980153,
         evaporateSpeed: 1.5932796335343884,
         diffuseSpeed: 37.7184512302995,
+    }
+
+    renderSettings = {
+        displacementStrength: 0.04
     }
 
     AGENT_COUNT = 30000;
@@ -135,6 +140,20 @@ export class Sketch {
         this.quadVAI = twgl.createVertexArrayInfo(gl, this.blurPrg, this.quadBufferInfo);
         this.sphereBufferInfo = twgl.primitives.createSphereBufferInfo(gl, 1, 15, 15);
         this.sphereVAI = twgl.createVertexArrayInfo(gl, this.spherePrg, this.sphereBufferInfo);
+
+        // load the icosphere model
+        this.glbBuilder = new GLBBuilder(gl);
+        await this.glbBuilder.load(new URL('../assets/model.glb', import.meta.url));
+        this.modelPrimitive = this.glbBuilder.getPrimitiveDataByMeshName('Icosphere');
+        this.modelBuffers = this.modelPrimitive.buffers;
+        this.modelBufferInfo = twgl.createBufferInfoFromArrays(gl, { 
+            position: {...this.modelBuffers.vertices, numComponents: this.modelBuffers.vertices.numberOfComponents},
+            normal: {...this.modelBuffers.normals, numComponents: this.modelBuffers.normals.numberOfComponents},
+            texcoord: {...this.modelBuffers.texcoords, numComponents: this.modelBuffers.texcoords.numberOfComponents},
+            tangent: {...this.modelBuffers.tangents, numComponents: this.modelBuffers.tangents.numberOfComponents},
+            indices: {...this.modelBuffers.indices, numComponents: this.modelBuffers.indices.numberOfComponents}
+        });
+        this.icosphereVAI = twgl.createVertexArrayInfo(gl, this.spherePrg, this.modelBufferInfo);
 
         // Setup Framebuffers
         this.agentAttachments = [
@@ -278,6 +297,9 @@ export class Sketch {
         simFolder.addInput(this.settings, 'sensorAngleSpacing', {min: 0, max: 4});
         simFolder.addInput(this.settings, 'evaporateSpeed', {min: 0, max: 20});
         simFolder.addInput(this.settings, 'diffuseSpeed', {min: 0, max: 200});
+
+        const renderFolder = this.pane.addFolder({ title: 'Rendering', expanded: true});
+        renderFolder.addInput(this.renderSettings, 'displacementStrength', {min: -.1, max: .1});
     }
 
     #animate(deltaTime) {
@@ -383,8 +405,9 @@ export class Sketch {
         // draw sphere
         twgl.bindFramebufferInfo(gl, null);
         gl.enable(gl.CULL_FACE);
-        gl.disable(gl.DEPTH_TEST);
-        gl.enable(gl.BLEND);
+        gl.enable(gl.DEPTH_TEST);
+        //  gl.enable(gl.BLEND);
+        //gl.blendFunc(gl.ZERO, gl.ONE_MINUS_SRC_ALPHA);
         this.gl.clearColor(0, 0, 0, 1);
         this.gl.clear(this.gl.COLOR_BUFFER_BIT | this.gl.DEPTH_BUFFER_BIT);
         gl.bindTexture(gl.TEXTURE_2D, this.currentFBI.attachments[0]);
@@ -392,7 +415,7 @@ export class Sketch {
 
         gl.blendFunc(gl.SRC_ALPHA, gl.DST_ALPHA);
         gl.useProgram(this.spherePrg.program);
-        gl.bindVertexArray(this.sphereVAI.vertexArrayObject);
+        gl.bindVertexArray(this.icosphereVAI.vertexArrayObject);
         twgl.setUniforms(this.spherePrg, {
             u_worldMatrix: this.worldMatrix,
             u_viewMatrix: this.camera.matrices.view,
@@ -401,11 +424,12 @@ export class Sketch {
             u_time: this.#time,
             u_cameraPos: this.camera.position,
             u_texture: this.blurFBI.attachments[0],
-        });
+            u_pointerDir: this.pointerDir
+        }, this.renderSettings);
         gl.cullFace(gl.FRONT);
-        twgl.drawBufferInfo(gl, this.sphereVAI);
+        twgl.drawBufferInfo(gl, this.icosphereVAI);
         gl.cullFace(gl.BACK);
-        twgl.drawBufferInfo(gl, this.sphereVAI);
+        twgl.drawBufferInfo(gl, this.icosphereVAI);
         gl.disable(gl.BLEND);
 
         this.currentFBI = this.outFBI;
