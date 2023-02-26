@@ -59,7 +59,7 @@ export class Sketch {
 
     AGENT_COUNT = 30000;
 
-    texSize = [800, 800];
+    texSize = [ 800, 800];
 
     pointer = [0, 0];
     prevPointerPos = [0, 0];
@@ -103,8 +103,10 @@ export class Sketch {
         if (needsResize) {
             gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
 
-            twgl.resizeFramebufferInfo(gl, this.fbi1, this.agentAttachments, this.texSize[0], this.texSize[1]);
-            twgl.resizeFramebufferInfo(gl, this.fbi2, this.agentAttachments, this.texSize[0], this.texSize[1]);
+            if (this.fbi1 && this.fbi2) {
+                twgl.resizeFramebufferInfo(gl, this.fbi1, this.agentAttachments, this.texSize[0], this.texSize[1]);
+                twgl.resizeFramebufferInfo(gl, this.fbi2, this.agentAttachments, this.texSize[0], this.texSize[1]);
+            }
         }
 
         this.#updateProjectionMatrix(gl);
@@ -172,7 +174,8 @@ export class Sketch {
         gl.generateMipmap(gl.TEXTURE_2D);
         gl.clearColor(0, 0, 0, 1);
         gl.clear(gl.COLOR_BUFFER_BIT);
-        this.blurFBI = twgl.createFramebufferInfo(gl, [{ minMag: gl.LINEAR }], this.texSize[0], this.texSize[1]);
+        this.blurFBI = twgl.createFramebufferInfo(gl, [{ min: gl.LINEAR }], this.texSize[0], this.texSize[1]);
+        gl.generateMipmap(gl.TEXTURE_2D);
 
         
         this.worldMatrix = mat4.create();
