@@ -18,6 +18,7 @@ uniform sampler2D tex;
 uniform vec2 u_pointer;
 uniform vec3 u_pointerDir;
 uniform vec2 u_pointerVelocity;
+uniform float u_pointerStrength;
 
 #include "../libs/lygia/math/const.glsl"
 #include "./util/octahedron2xyz.glsl"
@@ -99,7 +100,7 @@ void main() {
     // only apply pointer contribution when within center
     vec2 pointerPos = u_pointer * 2. - 1.;
     float pointerPosFactor = 1. -  smoothstep(0.5, 1., length(pointerPos));
-    newDirection *= pointerPosFactor;
+    newDirection *= u_pointerStrength;
     // shift the axis toward the pointer
     float attraction = 1.2;
     v_axis = shiftAxis(v_axis, newDirection * attraction);

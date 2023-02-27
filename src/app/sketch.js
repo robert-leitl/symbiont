@@ -1,4 +1,4 @@
-import { mat4, vec2, vec3, vec4 } from "gl-matrix";
+import { mat4, quat, vec2, vec3, vec4 } from "gl-matrix";
 import { filter, fromEvent, merge, throwIfEmpty } from "rxjs";
 import * as twgl from "twgl.js";
 import { ArcballControl } from "./utils/arcball-control";
@@ -12,6 +12,8 @@ import sphereFrag from './shader/sphere.frag.glsl';
 import blurFrag from './shader/blur.frag.glsl';
 import { rand } from "./utils";
 import { GLBBuilder } from "./utils/glb-builder";
+import { SecondOrderSystemValue } from "./utils/second-order-value";
+import { SecondOrderSystemQuaternion } from "./utils/second-order-quaternion";
 
 export class Sketch {
 
@@ -54,7 +56,7 @@ export class Sketch {
     }
 
     renderSettings = {
-        displacementStrength: 0.04
+        displacementStrength: 0.02
     }
 
     AGENT_COUNT = 30000;
@@ -62,8 +64,10 @@ export class Sketch {
     texSize = [ 800, 800];
 
     pointer = [0, 0];
-    prevPointerPos = [0, 0];
-    pointerDir = [0, 0, 0];
+    pointerDir = [0, 0, -1];
+    pointerStrength = 0;
+    displacementStrength = new SecondOrderSystemValue(1.5, 0.3, 2, 0);
+    pointerDirSOQ = new SecondOrderSystemQuaternion(1.5, 0.3, 1, quat.create());
     
     constructor(canvasElm, onInit = null, isDev = false, pane = null) {
         this.canvas = canvasElm;
@@ -166,16 +170,34 @@ export class Sketch {
                 wrap: gl.REPEAT
             },
         ];
-        this.fbi1 = twgl.createFramebufferInfo(gl, this.agentAttachments);
+        this.fbi1 = twgl.createFramebufferInfo(gl, this.agentAttachments, this.texSize[0], this.texSize[1]);
         gl.generateMipmap(gl.TEXTURE_2D);
         gl.clearColor(0, 0, 0, 1);
         gl.clear(gl.COLOR_BUFFER_BIT);
-        this.fbi2 = twgl.createFramebufferInfo(gl, this.agentAttachments);
+        this.fbi2 = twgl.createFramebufferInfo(gl, this.agentAttachments, this.texSize[0], this.texSize[1]);
         gl.generateMipmap(gl.TEXTURE_2D);
         gl.clearColor(0, 0, 0, 1);
         gl.clear(gl.COLOR_BUFFER_BIT);
-        this.blurFBI = twgl.createFramebufferInfo(gl, [{ min: gl.LINEAR }], this.texSize[0], this.texSize[1]);
+        this.blurFBI = twgl.createFramebufferInfo(gl, [{ min: gl.LINEAR, mag: gl.LINEAR }], this.texSize[0], this.texSize[1]);
         gl.generateMipmap(gl.TEXTURE_2D);
+
+        // Create the albedo color ramp texture
+        this.albedoRampTexture = twgl.createTexture(gl, 
+            {
+                minMag: gl.LINEAR,
+                format: gl.RGB,
+                wrap: gl.CLAMP_TO_EDGE,
+                src: new Uint8Array([
+                  251, 223, 112,
+                  255, 201, 0,
+                  //223, 123, 54,
+                  232, 192, 169,
+                  235, 224, 218
+                ]),
+                width: 4,
+                height: 1,
+              }
+        );
 
         
         this.worldMatrix = mat4.create();
@@ -263,7 +285,7 @@ export class Sketch {
             positions,
             axis
         }
-    };
+    }
 
     #initEvents() {
         this.isPointerDown = false;
@@ -277,8 +299,8 @@ export class Sketch {
         ).subscribe(() => this.isPointerDown = false);
 
         fromEvent(this.canvas, 'pointermove').subscribe((e) => {
-            this.pointer[0] = e.clientX / this.viewportSize[0];
-            this.pointer[1] = 1 -  e.clientY / this.viewportSize[1];
+            this.pointer[0] = e.clientX;
+            this.pointer[1] = this.viewportSize[1] - e.clientY;
         });
     }
 
@@ -311,7 +333,7 @@ export class Sketch {
 
         // use a fixed deltaTime of 16 ms adapted to
         // device frame rate
-        deltaTime = 16 * this.#deltaFrames;
+        deltaTime = 16 * this.#deltaFrames + 0.0001;
 
         this.control.update(deltaTime);
         mat4.fromQuat(this.worldMatrix, this.control.rotationQuat);
@@ -320,28 +342,35 @@ export class Sketch {
         mat4.invert(this.worldInverseMatrix, this.worldMatrix);
         mat4.transpose(this.worldInverseTransposeMatrix, this.worldInverseMatrix);
 
-        // get pointer velocity
-        this.pointerVelocity = [
-            this.pointer[0] - this.prevPointerPos[0],
-            this.pointer[1] - this.prevPointerPos[1]
-        ];
-        this.prevPointerPos = [...this.pointer];
-
         // get the pointer direction from the 2d position
-        const x = this.pointer[0] * 2 - 1;
-        const y = this.pointer[1] * 2 - 1;
+        const w = this.viewportSize[0];
+        const h = this.viewportSize[1];
+        const s = Math.max(w, h) - 1;
+        const x = (2 * this.pointer[0] - w - 1) / s;
+        const y = (2 * this.pointer[1] - h - 1) / s;
         const xySq = x * x + y * y;
         let z = 0;
-        const rSq = 1;
+        const rSq = .8;
         if (xySq <= rSq / 2)
             z = Math.sqrt(rSq - xySq);
         else
             z = (rSq / 2) / Math.sqrt(xySq); // hyperbolical function
 
-        this.pointerDir[0] = x;
-        this.pointerDir[1] = y;
-        this.pointerDir[2] = z;
+        const newPointerDir = vec3.fromValues(x, y, z);
+        vec3.normalize(newPointerDir, newPointerDir);
+        const pointerRotation = mat4.targetTo(mat4.create(), vec3.create(), newPointerDir, vec3.fromValues(0, 1, 0));
+        const pointerQuat = mat4.getRotation(quat.create(), pointerRotation);
+        this.pointerDirSOQ.updateApprox(deltaTime * 0.001, pointerQuat);
+        this.pointerDir = vec3.transformQuat(this.pointerDir, vec3.fromValues(0, 0, -1), this.pointerDirSOQ.value);
         vec3.transformMat4(this.pointerDir, this.pointerDir, this.worldInverseMatrix);
+
+        // get the pointer strength from the offset to the center
+        const influenceRadius = 0.6;
+        const targetPointerStrength = Math.sqrt(xySq) < influenceRadius ? 1 : 0;
+        this.pointerStrength += (targetPointerStrength - this.pointerStrength) / 1.5;
+
+        // update the displacement strength wobble
+        this.displacementStrength.update(deltaTime * 0.001, this.pointerStrength);
 
         this.#animateAgents();
     }
@@ -370,7 +399,7 @@ export class Sketch {
             resolution: this.texSize,
             u_pointer: this.pointer,
             u_pointerDir: this.pointerDir,
-            u_pointerVelocity: this.pointerVelocity,
+            u_pointerStrength: this.pointerStrength,
             deltaTime,
             tex: this.currentFBI.attachments[0],
         }, this.settings);
@@ -411,7 +440,7 @@ export class Sketch {
         gl.enable(gl.DEPTH_TEST);
         //  gl.enable(gl.BLEND);
         //gl.blendFunc(gl.ZERO, gl.ONE_MINUS_SRC_ALPHA);
-        this.gl.clearColor(0, 0, 0, 1);
+        this.gl.clearColor(1, 1, 0.99, 1);
         this.gl.clear(this.gl.COLOR_BUFFER_BIT | this.gl.DEPTH_BUFFER_BIT);
         gl.bindTexture(gl.TEXTURE_2D, this.currentFBI.attachments[0]);
         gl.generateMipmap(gl.TEXTURE_2D);
@@ -427,7 +456,9 @@ export class Sketch {
             u_time: this.#time,
             u_cameraPos: this.camera.position,
             u_texture: this.blurFBI.attachments[0],
-            u_pointerDir: this.pointerDir
+            u_pointerDir: this.pointerDir,
+            u_displacementStrength: this.renderSettings.displacementStrength * this.displacementStrength.value,
+            u_albedoRampTexture: this.albedoRampTexture
         }, this.renderSettings);
         gl.cullFace(gl.FRONT);
         twgl.drawBufferInfo(gl, this.icosphereVAI);

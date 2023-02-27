@@ -18,6 +18,6 @@ out vec4 outColor;
 
 void main() {
     vec2 size = vec2(textureSize(u_texture, 0));
-    vec4 color = gaussianBlur2D(u_texture, v_texcoord, 2. / size, 6);
+    vec4 color = gaussianBlur2D(u_texture, v_texcoord, 1.5 / size, 12);
     outColor = color;
 }

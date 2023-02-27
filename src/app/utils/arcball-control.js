@@ -15,7 +15,7 @@ export class ArcballControl {
         this.followPos = vec3.create();
         this.prevFollowPos = vec3.create();
         this.autoRotationSpeed = 0;
-        this.velocity = 0.00;
+        this.velocity = 0.002;
         this.rotationAxis = vec3.fromValues(0, 1, 0);
 
         canvas.style.touchAction = 'none';
