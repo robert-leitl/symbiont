@@ -9,6 +9,8 @@ import processFrag from './shader/process.frag.glsl';
 import spreadFrag from './shader/spread.frag.glsl';
 import sphereVert from './shader/sphere.vert.glsl';
 import sphereFrag from './shader/sphere.frag.glsl';
+import sphereBackVert from './shader/sphere-back.vert.glsl';
+import sphereBackFrag from './shader/sphere-back.frag.glsl';
 import blurFrag from './shader/blur.frag.glsl';
 import { rand } from "./utils";
 import { GLBBuilder } from "./utils/glb-builder";
@@ -29,7 +31,7 @@ export class Sketch {
     camera = {
         matrix: mat4.create(),
         near: 2,
-        far: 4,
+        far: 6,
         fov: Math.PI / 3,
         aspect: 1,
         position: vec3.fromValues(0, 0, 4),
@@ -66,8 +68,8 @@ export class Sketch {
     pointer = [0, 0];
     pointerDir = [0, 0, -1];
     pointerStrength = 0;
-    displacementStrength = new SecondOrderSystemValue(1.5, 0.3, 2, 0);
-    pointerDirSOQ = new SecondOrderSystemQuaternion(1.5, 0.3, 1, quat.create());
+    displacementStrength = new SecondOrderSystemValue(0.8, 0.3, 2, 0);
+    pointerDirSOQ = new SecondOrderSystemQuaternion(1, 0.2, 1, quat.create());
     
     constructor(canvasElm, onInit = null, isDev = false, pane = null) {
         this.canvas = canvasElm;
@@ -140,6 +142,7 @@ export class Sketch {
         this.spreadPrg = twgl.createProgramInfo(gl, [quadVert, spreadFrag]);
         this.blurPrg = twgl.createProgramInfo(gl, [quadVert, blurFrag]);
         this.spherePrg = twgl.createProgramInfo(gl, [sphereVert, sphereFrag]);
+        this.sphereBackPrg = twgl.createProgramInfo(gl, [sphereBackVert, sphereBackFrag]);
 
         // Setup Meshes
         this.quadBufferInfo = twgl.primitives.createXYQuadBufferInfo(gl);
@@ -150,7 +153,7 @@ export class Sketch {
         // load the icosphere model
         this.glbBuilder = new GLBBuilder(gl);
         await this.glbBuilder.load(new URL('../assets/model.glb', import.meta.url));
-        this.modelPrimitive = this.glbBuilder.getPrimitiveDataByMeshName('Icosphere');
+        this.modelPrimitive = this.glbBuilder.getPrimitiveDataByMeshName('Icosphere.001');
         this.modelBuffers = this.modelPrimitive.buffers;
         this.modelBufferInfo = twgl.createBufferInfoFromArrays(gl, { 
             position: {...this.modelBuffers.vertices, numComponents: this.modelBuffers.vertices.numberOfComponents},
@@ -188,17 +191,20 @@ export class Sketch {
                 format: gl.RGB,
                 wrap: gl.CLAMP_TO_EDGE,
                 src: new Uint8Array([
-                  251, 223, 112,
-                  255, 201, 0,
-                  //223, 123, 54,
-                  232, 192, 169,
-                  235, 224, 218
+                  //251, 223, 112,
+                  //255, 201, 0,
+                  155, 10, 10,
+                  130, 20, 20,
+                  190, 155, 160,
+                  //212, 190, 149,
+                  210, 190, 180,
                 ]),
                 width: 4,
                 height: 1,
               }
         );
 
+        await this.#initImageTextures();
         
         this.worldMatrix = mat4.create();
         this.worldInverseMatrix = mat4.create();
@@ -308,7 +314,13 @@ export class Sketch {
         /** @type {WebGLRenderingContext} */
         const gl = this.gl;
 
-        return Promise.all([dirtTexturePromise]);
+        const envTexturePromise = new Promise((resolve) => {
+            this.envTexture = twgl.createTexture(gl, {
+                src: new URL('../assets/env.jpg', import.meta.url).toString(),
+            }, () => resolve());
+        });
+
+        return Promise.all([envTexturePromise]);
     }
 
     #initTweakpane() {
@@ -438,16 +450,27 @@ export class Sketch {
         twgl.bindFramebufferInfo(gl, null);
         gl.enable(gl.CULL_FACE);
         gl.enable(gl.DEPTH_TEST);
-        //  gl.enable(gl.BLEND);
-        //gl.blendFunc(gl.ZERO, gl.ONE_MINUS_SRC_ALPHA);
         this.gl.clearColor(1, 1, 0.99, 1);
         this.gl.clear(this.gl.COLOR_BUFFER_BIT | this.gl.DEPTH_BUFFER_BIT);
         gl.bindTexture(gl.TEXTURE_2D, this.currentFBI.attachments[0]);
         gl.generateMipmap(gl.TEXTURE_2D);
 
-        gl.blendFunc(gl.SRC_ALPHA, gl.DST_ALPHA);
         gl.useProgram(this.spherePrg.program);
         gl.bindVertexArray(this.icosphereVAI.vertexArrayObject);
+        
+        gl.cullFace(gl.FRONT);
+        gl.useProgram(this.sphereBackPrg.program);
+        twgl.setUniforms(this.sphereBackPrg, {
+            u_worldMatrix: this.worldMatrix,
+            u_viewMatrix: this.camera.matrices.view,
+            u_projectionMatrix: this.camera.matrices.projection,
+            u_texture: this.blurFBI.attachments[0],
+        }, this.renderSettings);
+        twgl.drawBufferInfo(gl, this.icosphereVAI);
+        gl.cullFace(gl.BACK);
+        gl.enable(gl.BLEND);
+        gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+        gl.useProgram(this.spherePrg.program);
         twgl.setUniforms(this.spherePrg, {
             u_worldMatrix: this.worldMatrix,
             u_viewMatrix: this.camera.matrices.view,
@@ -458,11 +481,9 @@ export class Sketch {
             u_texture: this.blurFBI.attachments[0],
             u_pointerDir: this.pointerDir,
             u_displacementStrength: this.renderSettings.displacementStrength * this.displacementStrength.value,
-            u_albedoRampTexture: this.albedoRampTexture
+            u_albedoRampTexture: this.albedoRampTexture,
+            u_envTexture: this.envTexture
         }, this.renderSettings);
-        gl.cullFace(gl.FRONT);
-        twgl.drawBufferInfo(gl, this.icosphereVAI);
-        gl.cullFace(gl.BACK);
         twgl.drawBufferInfo(gl, this.icosphereVAI);
         gl.disable(gl.BLEND);
 

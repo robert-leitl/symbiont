@@ -15,12 +15,12 @@ vec3 distort(
   // increase the displacement near the pointer
   float pointerOffset = max(0., dot(pos, normalize(pointerDir)));
   float pointerIntensity = smoothstep(0.5, 1., pointerOffset);
-  pos *= pow(pointerOffset, 4.) * 7. * displacementStrength + 1.;
+  pos *= pow(pointerOffset, 4.) * 6. * displacementStrength + 1.;
 
   // apply the vertex displacement
   float h = map.r;
   h = smoothstep(0.1, 1.5, h);
-  float displacement = 1. + h * (displacementStrength + 0.05 + pointerIntensity * 2. * displacementStrength);
+  float displacement = 1. + h * (displacementStrength + 0.06 + pointerIntensity * 2. * displacementStrength);
   pos *= displacement;
 
   // apply wobble displacement
