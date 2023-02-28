@@ -35,5 +35,5 @@ void main() {
     float ny = min(max(-dy * nz, -1.), 1.);
     vec3 normal = vec3(nx, ny, nz);
 
-    outColor = vec4(normal * 0.5 + 0.5, 1.);
+    outColor = vec4(normal * 0.5 + 0.5, noiseSimplex);
 }

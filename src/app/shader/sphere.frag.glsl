@@ -62,10 +62,10 @@ void main() {
     B = cross(T, N);
     T = cross(N, B);
     mat3 tangentSpace = mat3(T, B, N);
-    N = normalize(N + tangentSpace * noiseNormal * rampValue * .1);
+    N = normalize(N + tangentSpace * noiseNormal * rampValue * .06);
 
     N = (u_worldInverseTransposeMatrix * vec4(normalize(N), 0.)).xyz;
-    vec3 R = reflect(V, N);
+    vec3 R = reflect(V, N + vec3(0., .2, 0.));
     
     // fresnel term
     float fresnel = 1. - max(0., dot(N, V));
@@ -74,20 +74,24 @@ void main() {
     vec3 worldNormal = (u_worldInverseTransposeMatrix * vec4(normal, 0.)).xyz;
     float flatFresnel = 1. - max(0., dot(worldNormal, V));
 
+    // diffuse for the vains
+    float diffuse = mix(1., max(0., dot(N, L)), rampValue * (1. - flatFresnel));
+
     // albedo color
     vec3 albedo = texture(u_albedoRampTexture, vec2(1. - rampValue, 0.)).rgb;
     // boost the vains on the edge (simulate subsurface scattering)
-    albedo += (flatFresnel * flatFresnel * smoothstep(0.3, 1., value)) * 0.9;
+    albedo += (flatFresnel * flatFresnel * smoothstep(0.3, 1., value));
     albedo += flatFresnel * flatFresnel * .3 * (1. - value);
+    albedo = mix(vec3(0.3, 0., 0.), albedo, diffuse);
     
     // specular
-    float specular = specularBlinnPhong(L, N, V, 300.);
+    float specular = specularBlinnPhong(L, N, V, 100.);
 
     // environment reflection
     vec3 envReflection = texture(u_envTexture, xyz2equirect(R)).rgb;
 
     // combined color
-    vec3 color = albedo * 0.95 + (envReflection * 0.3 + specular * 0.2) * rampValue;
+    vec3 color = albedo * 0.95 + (envReflection * .3 + specular * 0.5) * rampValue;
 
     outColor = tonemapLinear(vec4(color, rampValue * 0.1 + 0.9));
 
