@@ -11,6 +11,7 @@ uniform vec3 u_pointerDir;
 uniform float u_displacementStrength;
 uniform sampler2D u_albedoRampTexture;
 uniform sampler2D u_envTexture;
+uniform sampler2D u_noiseTexture;
 
 out vec4 outColor;
 
@@ -29,7 +30,8 @@ in vec3 v_surfaceToView;
 #include "../libs/lygia/color/desaturate.glsl"
 
 void main() {
-    vec2 uv = xyz2octahedron(normalize(v_position));
+    vec3 positionNorm = normalize(v_position);
+    vec2 uv = xyz2octahedron(positionNorm);
     vec3 pos = (u_worldMatrix * vec4(v_position, 0.)).xyz;
     vec3 L = normalize(vec3(1., 1., 1.));
     vec3 V = normalize(v_surfaceToView);
@@ -50,11 +52,14 @@ void main() {
     N = (u_worldInverseTransposeMatrix * vec4(normalize(N), 0.)).xyz;
     vec3 R = reflect(V, N);
 
+    // noise texture
+    vec4 noiseTex = texture(u_noiseTexture, xyz2equirect(positionNorm));
+
     // get the value from the simulation
     float valueNoise1 = snoise(pos * 90. + u_time * 0.0001);
     float valueNoise2 = snoise(pos * 10. + u_time * 0.0001);
     outColor = texture(u_texture, uv);
-    float value = outColor.r + valueNoise1 * 0.02; // + valueNoise2 * 0.05;
+    float value = outColor.r + noiseTex.a * 0.05; // + valueNoise2 * 0.05;
     
     // fresnel term
     float fresnel = 1. - max(0., dot(N, V));

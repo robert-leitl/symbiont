@@ -11,6 +11,8 @@ import sphereVert from './shader/sphere.vert.glsl';
 import sphereFrag from './shader/sphere.frag.glsl';
 import sphereBackVert from './shader/sphere-back.vert.glsl';
 import sphereBackFrag from './shader/sphere-back.frag.glsl';
+import textureVert from './shader/texture.vert.glsl';
+import textureFrag from './shader/texture.frag.glsl';
 import blurFrag from './shader/blur.frag.glsl';
 import { rand } from "./utils";
 import { GLBBuilder } from "./utils/glb-builder";
@@ -139,6 +141,7 @@ export class Sketch {
         this.processPrg = twgl.createProgramInfo(gl, [processVert, processFrag], {
             transformFeedbackVaryings: ['v_position', 'v_axis'],
         });
+        this.texturePrg = twgl.createProgramInfo(gl, [textureVert, textureFrag]);
         this.spreadPrg = twgl.createProgramInfo(gl, [quadVert, spreadFrag]);
         this.blurPrg = twgl.createProgramInfo(gl, [quadVert, blurFrag]);
         this.spherePrg = twgl.createProgramInfo(gl, [sphereVert, sphereFrag]);
@@ -183,6 +186,12 @@ export class Sketch {
         gl.clear(gl.COLOR_BUFFER_BIT);
         this.blurFBI = twgl.createFramebufferInfo(gl, [{ min: gl.LINEAR, mag: gl.LINEAR }], this.texSize[0], this.texSize[1]);
         gl.generateMipmap(gl.TEXTURE_2D);
+        const resScale = Math.max(this.viewportSize[0], this.viewportSize[1]) > 800 ? 1 : 0.5;
+        this.textureFBI = twgl.createFramebufferInfo(
+            gl, 
+            [{minMag: gl.LINEAR}], 
+            2048 * resScale, 1024 * resScale
+        );
 
         // Create the albedo color ramp texture
         this.albedoRampTexture = twgl.createTexture(gl, 
@@ -195,11 +204,6 @@ export class Sketch {
                   130, 20, 20,
                   190, 155, 160,
                   210, 190, 180,
-
-                  /*195, 150, 10,
-                  170, 130, 20,
-                  90, 75, 50,
-                  20, 10, 10*/
                 ]),
                 width: 4,
                 height: 1,
@@ -439,6 +443,21 @@ export class Sketch {
         /** @type {WebGLRenderingContext} */
         const gl = this.gl;
 
+        // render the texture
+        if (!this.prerender) {
+            this.prerender = true;
+            twgl.bindFramebufferInfo(gl, this.textureFBI);
+            gl.bindVertexArray(this.quadVAI.vertexArrayObject);
+            gl.disable(gl.CULL_FACE);
+            gl.disable(gl.DEPTH_TEST);
+            this.gl.clearColor(0, 0, 0, 1);
+            this.gl.clear(this.gl.COLOR_BUFFER_BIT | this.gl.DEPTH_BUFFER_BIT);
+            this.gl.useProgram(this.texturePrg.program);
+            twgl.setUniforms(this.texturePrg, {});
+            twgl.drawBufferInfo(gl, this.quadVAI);
+        }
+
+
         // blur texture
         twgl.bindFramebufferInfo(gl, this.blurFBI);
         gl.useProgram(this.blurPrg.program);
@@ -484,7 +503,8 @@ export class Sketch {
             u_pointerDir: this.pointerDir,
             u_displacementStrength: this.renderSettings.displacementStrength * this.displacementStrength.value,
             u_albedoRampTexture: this.albedoRampTexture,
-            u_envTexture: this.envTexture
+            u_envTexture: this.envTexture,
+            u_noiseTexture: this.textureFBI.attachments[0]
         }, this.renderSettings);
         twgl.drawBufferInfo(gl, this.icosphereVAI);
         gl.disable(gl.BLEND);
