@@ -70,8 +70,8 @@ export class Sketch {
     pointer = [0, 0];
     pointerDir = [0, 0, -1];
     pointerStrength = 0;
-    displacementStrength = new SecondOrderSystemValue(0.8, 0.3, 2, 0);
-    pointerDirSOQ = new SecondOrderSystemQuaternion(1, 0.2, 1, quat.create());
+    displacementStrength = new SecondOrderSystemValue(1.8, 0.6, 2, 0);
+    pointerDirSOQ = new SecondOrderSystemQuaternion(2, 0.2, 1, quat.create());
     
     constructor(canvasElm, onInit = null, isDev = false, pane = null) {
         this.canvas = canvasElm;
