@@ -13,9 +13,14 @@ vec3 distort(
   vec4 map = texture(tex, st);
 
   // increase the displacement near the pointer
-  float pointerOffset = max(0., dot(pos, normalize(pointerDir)));
+  float pointerDist = dot(pos, normalize(u_pointerDir));
+  float pointerOffset = max(0., pointerDist);
   float pointerIntensity = smoothstep(0.5, 1., pointerOffset);
   pos *= pow(pointerOffset, 4.) * 6. * displacementStrength + 1.;
+
+  // get the pointer pulse effect
+  float pointerPulse = sin(pointerDist * 5. - u_time * 0.005);
+  pointerPulse = pointerPulse * displacementStrength + 1.;
 
   // apply the vertex displacement
   float h = map.r;
@@ -27,6 +32,8 @@ vec3 distort(
   float wobbleStrength = 0.04;
   pos.x *= sin(time * 0.0005 + pos.x) * wobbleStrength + (1. - wobbleStrength);
   pos.y *= cos(time * 0.0009 + pos.y) * wobbleStrength + (1. - wobbleStrength);
+
+  pos *= mix(pointerPulse, 1., h);
 
   return pos;
 }

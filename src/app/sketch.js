@@ -374,7 +374,8 @@ export class Sketch {
         else
             z = (rSq / 2) / Math.sqrt(xySq); // hyperbolical function
 
-        const newPointerDir = vec3.fromValues(x, y, z);
+        const spherePos = this.#screenToSpherePos(this.pointer);
+        const newPointerDir = spherePos ? spherePos : vec3.fromValues(x, y, z);
         vec3.normalize(newPointerDir, newPointerDir);
         const pointerRotation = mat4.targetTo(mat4.create(), vec3.create(), newPointerDir, vec3.fromValues(0, 1, 0));
         const pointerQuat = mat4.getRotation(quat.create(), pointerRotation);
@@ -383,8 +384,7 @@ export class Sketch {
         vec3.transformMat4(this.pointerDir, this.pointerDir, this.worldInverseMatrix);
 
         // get the pointer strength from the offset to the center
-        const influenceRadius = 0.6;
-        const targetPointerStrength = Math.sqrt(xySq) < influenceRadius ? 1 : 0;
+        const targetPointerStrength = spherePos ? 1 : 0;
         this.pointerStrength += (targetPointerStrength - this.pointerStrength) / 1.5;
 
         // update the displacement strength wobble
@@ -401,42 +401,49 @@ export class Sketch {
         /** @type {WebGLRenderingContext} */
         const gl = this.gl;
 
-        const targetTFI = this.sourceTFI === this.tfi1 ? this.tfi2 : this.tfi1;
-        this.outFBI = this.currentFBI === this.fbi1 ? this.fbi2 : this.fbi1;
-
-        // update particle positions
-        gl.bindBuffer(gl.ARRAY_BUFFER, null);
-        twgl.bindFramebufferInfo(gl, this.outFBI);
-
-        gl.useProgram(this.processPrg.program);
-        gl.bindVertexArray(this.sourceTFI.vertexArrayInfo.vertexArrayObject);
-        gl.bindTransformFeedback(gl.TRANSFORM_FEEDBACK, targetTFI.transformFeedback);
-        gl.beginTransformFeedback(gl.POINTS);
-
-        twgl.setUniforms(this.processPrg, {
-            resolution: this.texSize,
-            u_pointer: this.pointer,
-            u_pointerDir: this.pointerDir,
-            u_pointerStrength: this.pointerStrength,
-            deltaTime,
-            tex: this.currentFBI.attachments[0],
-        }, this.settings);
-        twgl.drawBufferInfo(gl, this.sourceTFI.vertexArrayInfo, gl.POINTS, this.AGENT_COUNT);
-
-        this.sourceTFI = targetTFI;
-
-        gl.endTransformFeedback();
-        gl.bindTransformFeedback(gl.TRANSFORM_FEEDBACK, null);
-
-        // update spread diffuse texture
-        twgl.bindFramebufferInfo(gl, this.currentFBI);
-        gl.useProgram(this.spreadPrg.program);
-        gl.bindVertexArray(this.quadVAI.vertexArrayObject);
-        twgl.setUniforms(this.spreadPrg, {
-            deltaTime,
-            tex: this.outFBI.attachments[0],
-        }, this.settings);
-        twgl.drawBufferInfo(gl, this.quadVAI);
+        const repeatCount = Math.max(1, 3 - Math.round(1 / (this.#deltaFrames + 0.00001)));
+        console.log(repeatCount);
+        for(let i=0; i<repeatCount; ++i) {
+            let targetTFI = this.sourceTFI === this.tfi1 ? this.tfi2 : this.tfi1;
+            this.outFBI = this.currentFBI === this.fbi1 ? this.fbi2 : this.fbi1;
+    
+            // update particle positions
+            gl.bindBuffer(gl.ARRAY_BUFFER, null);
+            twgl.bindFramebufferInfo(gl, this.outFBI);
+    
+            gl.useProgram(this.processPrg.program);
+            gl.bindVertexArray(this.sourceTFI.vertexArrayInfo.vertexArrayObject);
+            gl.bindTransformFeedback(gl.TRANSFORM_FEEDBACK, targetTFI.transformFeedback);
+            gl.beginTransformFeedback(gl.POINTS);
+    
+            twgl.setUniforms(this.processPrg, {
+                resolution: this.texSize,
+                u_pointer: this.pointer,
+                u_pointerDir: this.pointerDir,
+                u_pointerStrength: this.pointerStrength,
+                deltaTime,
+                tex: this.currentFBI.attachments[0],
+            }, this.settings);
+            twgl.drawBufferInfo(gl, this.sourceTFI.vertexArrayInfo, gl.POINTS, this.AGENT_COUNT);
+    
+            this.sourceTFI = targetTFI;
+    
+            gl.endTransformFeedback();
+            gl.bindTransformFeedback(gl.TRANSFORM_FEEDBACK, null);
+    
+            // update spread diffuse texture
+            twgl.bindFramebufferInfo(gl, this.currentFBI);
+            gl.useProgram(this.spreadPrg.program);
+            gl.bindVertexArray(this.quadVAI.vertexArrayObject);
+            twgl.setUniforms(this.spreadPrg, {
+                deltaTime,
+                tex: this.outFBI.attachments[0],
+            }, this.settings);
+            twgl.drawBufferInfo(gl, this.quadVAI);
+    
+            this.resultFBI = this.currentFBI;
+            this.currentFBI = this.outFBI;
+        }
     }
 
     #render() {
@@ -473,7 +480,7 @@ export class Sketch {
         gl.enable(gl.DEPTH_TEST);
         this.gl.clearColor(1, 1, 0.99, 1);
         this.gl.clear(this.gl.COLOR_BUFFER_BIT | this.gl.DEPTH_BUFFER_BIT);
-        gl.bindTexture(gl.TEXTURE_2D, this.currentFBI.attachments[0]);
+        gl.bindTexture(gl.TEXTURE_2D, this.resultFBI.attachments[0]);
         gl.generateMipmap(gl.TEXTURE_2D);
 
         gl.useProgram(this.spherePrg.program);
@@ -508,8 +515,6 @@ export class Sketch {
         }, this.renderSettings);
         twgl.drawBufferInfo(gl, this.icosphereVAI);
         gl.disable(gl.BLEND);
-
-        this.currentFBI = this.outFBI;
     }
 
     #updateCameraMatrix() {
@@ -531,5 +536,48 @@ export class Sketch {
         mat4.perspective(this.camera.matrices.projection, this.camera.fov, this.camera.aspect, this.camera.near, this.camera.far);
         mat4.invert(this.camera.matrices.inversProjection, this.camera.matrices.projection);
         mat4.multiply(this.camera.matrices.inversViewProjection, this.camera.matrix, this.camera.matrices.inversProjection)
+    }
+
+    #screenToSpherePos(screenPos) {
+        // map to -1 to 1
+        const x = (screenPos[0] / this.viewportSize[0]) * 2. - 1;
+        const y = (screenPos[1] / this.viewportSize[1]) * 2. - 1;
+        
+        // l(t) = p + t * u
+        const p = this.#screenToWorldPosition(x, y, 0);
+        const u = vec3.subtract(vec3.create(), p, this.camera.position);
+        vec3.normalize(u, u);
+
+        // sphere at origin intersection
+        const radius = 1.05;
+        const c = vec3.dot(p, p) - radius * radius;
+        const b = vec3.dot(u, p) * 2;
+        const a = 1;
+        const d = b * b - 4 * a * c;
+
+        if (d < 0) { 
+            // No solution
+            return null;
+        } else {
+            const sd = Math.sqrt(d);
+            const t1 = (-b + sd) / (2 * a);
+            const t2 = (-b - sd) / (2 * a);
+            const t = Math.min(t1, t2);
+
+            vec3.scale(u, u, t);
+            const i = vec3.add(vec3.create(), p, u);
+
+            return i;
+        }
+    }
+
+    #screenToWorldPosition(x, y, z) {
+        const ndcPos = vec3.fromValues(x, y, z); 
+        const worldPos = vec4.transformMat4(vec4.create(), vec4.fromValues(ndcPos[0], ndcPos[1], ndcPos[2], 1), this.camera.matrices.inversViewProjection);
+        if (worldPos[3] !== 0){
+            vec4.scale(worldPos, worldPos, 1 / worldPos[3]);
+        }
+
+        return worldPos;
     }
 }

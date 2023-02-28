@@ -81,7 +81,7 @@ void main() {
     vec3 albedo = texture(u_albedoRampTexture, vec2(1. - rampValue, 0.)).rgb;
     // boost the vains on the edge (simulate subsurface scattering)
     albedo += (flatFresnel * flatFresnel * smoothstep(0.3, 1., value));
-    albedo += flatFresnel * flatFresnel * .3 * (1. - value);
+    albedo += flatFresnel * flatFresnel * .2 * (1. - value);
     albedo = mix(vec3(0.3, 0., 0.), albedo, diffuse);
     
     // specular
