@@ -12,6 +12,7 @@ uniform float u_displacementStrength;
 uniform sampler2D u_albedoRampTexture;
 uniform sampler2D u_envTexture;
 uniform sampler2D u_noiseTexture;
+uniform float u_hueShift;
 
 out vec4 outColor;
 
@@ -28,6 +29,7 @@ in vec3 v_surfaceToView;
 #include "../libs/lygia/color/tonemap/linear.glsl"
 #include "../libs/lygia/color/hueShift.glsl"
 #include "../libs/lygia/color/desaturate.glsl"
+#include "../libs/lygia/color/contrast.glsl"
 
 void main() {
     vec3 positionNorm = normalize(v_position);
@@ -39,7 +41,7 @@ void main() {
 
     vec2 uv = xyz2octahedron(positionNorm);
     vec3 pos = (u_worldMatrix * vec4(v_position, 0.)).xyz;
-    vec3 L = normalize(vec3(1., 1., 1.));
+    vec3 L = normalize(vec3(.5, 1., 1.));
     vec3 V = normalize(v_surfaceToView);
     vec3 P = distort(u_texture, v_position, u_pointerDir, u_displacementStrength, u_time);
     vec3 N = normal;
@@ -55,7 +57,7 @@ void main() {
     vec2 epsilon = vec2(0.05);
     vec3 t = distort(u_texture, v_position + T * epsilon.x, u_pointerDir, u_displacementStrength, u_time);
     vec3 b = distort(u_texture, v_position + B * epsilon.y, u_pointerDir, u_displacementStrength, u_time);
-    float normalStrength = 0.8;
+    float normalStrength = 2.;
     N = N + normalize(cross(t - P, P - b)) * normalStrength;
 
     // apply the noise normal to the already pertubed normal
@@ -75,14 +77,20 @@ void main() {
     float flatFresnel = 1. - max(0., dot(worldNormal, V));
 
     // diffuse for the vains
-    float diffuse = mix(1., max(0., dot(N, L)), rampValue * (1. - flatFresnel));
+    float diffuse = mix(1., max(0., dot(N, L)), (1. - flatFresnel));
+    diffuse = smoothstep(0.5, .8, diffuse);
 
     // albedo color
     vec3 albedo = texture(u_albedoRampTexture, vec2(1. - rampValue, 0.)).rgb;
     // boost the vains on the edge (simulate subsurface scattering)
-    albedo += (flatFresnel * flatFresnel * smoothstep(0.3, 1., value));
-    albedo += flatFresnel * flatFresnel * .2 * (1. - value);
-    albedo = mix(vec3(0.3, 0., 0.), albedo, diffuse);
+    float vainsSSS = (flatFresnel * flatFresnel * smoothstep(0.3, 1., value));
+    // add sss to vains
+    albedo.rg += vainsSSS;
+    albedo.b += vainsSSS * 0.85;
+    albedo += flatFresnel * flatFresnel * .2 * (1. - value); // add sss to white body
+    albedo = mix(albedo * vec3(.95, 0.85, 0.85), albedo, min(1., diffuse + 0.5));
+    //albedo = desaturate(albedo, .01);
+    //albedo = hueShift(albedo, u_hueShift);
     
     // specular
     float specular = specularBlinnPhong(L, N, V, 100.);
@@ -98,4 +106,6 @@ void main() {
     //outColor = noiseTex;
     //outColor.a = 1.;
     //outColor = vec4(N, 1.);
+    //outColor = vec4(diffuse);
+    //outColor.a = 1.;
 }

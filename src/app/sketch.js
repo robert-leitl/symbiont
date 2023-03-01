@@ -60,7 +60,8 @@ export class Sketch {
     }
 
     renderSettings = {
-        displacementStrength: 0.02
+        displacementStrength: 0.02,
+        hueShift: 0
     }
 
     AGENT_COUNT = 30000;
@@ -70,8 +71,8 @@ export class Sketch {
     pointer = [0, 0];
     pointerDir = [0, 0, -1];
     pointerStrength = 0;
-    displacementStrength = new SecondOrderSystemValue(1.8, 0.6, 2, 0);
-    pointerDirSOQ = new SecondOrderSystemQuaternion(2, 0.2, 1, quat.create());
+    displacementStrength = new SecondOrderSystemValue(1.8, 0.3, 2, 0);
+    pointerDirSOQ = new SecondOrderSystemQuaternion(2, 0.5, 1, quat.create());
     
     constructor(canvasElm, onInit = null, isDev = false, pane = null) {
         this.canvas = canvasElm;
@@ -203,7 +204,7 @@ export class Sketch {
                   155, 10, 10,
                   130, 20, 20,
                   190, 155, 160,
-                  210, 190, 180,
+                  210, 200, 190,
                 ]),
                 width: 4,
                 height: 1,
@@ -343,6 +344,7 @@ export class Sketch {
 
         const renderFolder = this.pane.addFolder({ title: 'Rendering', expanded: true});
         renderFolder.addInput(this.renderSettings, 'displacementStrength', {min: -.1, max: .1});
+        renderFolder.addInput(this.renderSettings, 'hueShift', {min: 0, max: 1});
     }
 
     #animate(deltaTime) {
@@ -511,7 +513,8 @@ export class Sketch {
             u_displacementStrength: this.renderSettings.displacementStrength * this.displacementStrength.value,
             u_albedoRampTexture: this.albedoRampTexture,
             u_envTexture: this.envTexture,
-            u_noiseTexture: this.textureFBI.attachments[0]
+            u_noiseTexture: this.textureFBI.attachments[0],
+            u_hueShift: this.renderSettings.hueShift
         }, this.renderSettings);
         twgl.drawBufferInfo(gl, this.icosphereVAI);
         gl.disable(gl.BLEND);

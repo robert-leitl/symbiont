@@ -19,7 +19,7 @@ void main() {
 
     float noiseWorley_c = worley(dir * 30.);
     vec2 texelSize = vec2(dFdx(st).x, dFdy(st).y);
-    float noiseScale = 100.;
+    float noiseScale = 30.;
     float noiseWorley_px = worley(equirect2xyz(st + texelSize) * noiseScale);
     float noiseWorley_py = worley(equirect2xyz(st + texelSize) * noiseScale);
     float noiseWorley_nx = worley(equirect2xyz(st - texelSize) * noiseScale);
