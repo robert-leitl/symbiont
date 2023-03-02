@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "start": "vite serve",
-    "build": "vite build --emptyOutDir --base=/phase-transition/dist/",
+    "build": "vite build --emptyOutDir --base=/symbiont/dist/",
     "preview": "vite preview"
   },
   "devDependencies": {
