@@ -89,8 +89,7 @@ void main() {
     albedo.b += vainsSSS * 0.85;
     albedo += flatFresnel * flatFresnel * .2 * (1. - value); // add sss to white body
     albedo = mix(albedo * vec3(.95, 0.85, 0.85), albedo, min(1., diffuse + 0.5));
-    //albedo = desaturate(albedo, .01);
-    //albedo = hueShift(albedo, u_hueShift);
+    albedo = hueShift(albedo, u_hueShift);
     
     // specular
     float specular = specularBlinnPhong(L, N, V, 100.);

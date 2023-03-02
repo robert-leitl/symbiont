@@ -343,7 +343,7 @@ export class Sketch {
         simFolder.addInput(this.settings, 'diffuseSpeed', {min: 0, max: 200});
 
         const renderFolder = this.pane.addFolder({ title: 'Rendering', expanded: true});
-        renderFolder.addInput(this.renderSettings, 'displacementStrength', {min: -.1, max: .1});
+        renderFolder.addInput(this.renderSettings, 'displacementStrength', {min: -.03, max: .03});
         renderFolder.addInput(this.renderSettings, 'hueShift', {min: 0, max: 1});
     }
 
