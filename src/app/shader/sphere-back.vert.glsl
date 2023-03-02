@@ -13,7 +13,7 @@ out vec3 v_position;
 out vec3 v_normal;
 
 void main() {
-  vec3 pos = position;
+  vec3 pos = position * 0.99;
   vec4 worldPosition = u_worldMatrix * vec4(pos, 1.);
   gl_Position = u_projectionMatrix * u_viewMatrix * worldPosition;
 

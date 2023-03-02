@@ -1,9 +1,13 @@
 import { quat, vec3, vec2, mat3 } from 'gl-matrix';
+import { SecondOrderSystemQuaternion } from './second-order-quaternion';
 
 export class ArcballControl {
 
     // the current rotation quaternion
     rotationQuat = quat.create();
+    rotationQuatInner = quat.create();
+
+    rotationSOQ = new SecondOrderSystemQuaternion(1, 0.5, 1, quat.create());
 
     constructor(canvas, updateCallback) {
         this.canvas = canvas;
@@ -47,8 +51,8 @@ export class ArcballControl {
 
         // the mouse follower
         const damping = 10 * timeScale;
-        this.followPos[0] += (this.pointerPos[0] - this.followPos[0]) / damping;
-        this.followPos[1] += (this.pointerPos[1] - this.followPos[1]) / damping;
+        this.followPos[0] += (this.pointerPos[0] - this.followPos[0]);
+        this.followPos[1] += (this.pointerPos[1] - this.followPos[1]);
 
         let r;
         if (this.pointerDown) {
@@ -78,8 +82,11 @@ export class ArcballControl {
         }
 
         // apply the new rotation to the current rotation and normalize
-        quat.multiply(this.rotationQuat, r, this.rotationQuat);
-        quat.normalize(this.rotationQuat, this.rotationQuat);
+        quat.multiply(this.rotationQuatInner, r, this.rotationQuatInner);
+        quat.normalize(this.rotationQuatInner, this.rotationQuatInner);
+
+        this.rotationSOQ.updateApprox(deltaTime * 0.001, this.rotationQuatInner);
+        this.rotationQuat = quat.clone(this.rotationSOQ.value);
 
         // update for the next iteration
         this.prevFollowPos = vec3.clone(this.followPos);
